@@ -10,12 +10,14 @@ from gym import spaces, error
 from gym.utils import seeding
 
 try:
-    import doom_py
-    from doom_py import DoomGame, Mode, Button, GameVariable, ScreenFormat, ScreenResolution, Loader
-    from doom_py.vizdoom import ViZDoomUnexpectedExitException, ViZDoomErrorException
+    # import doom_py
+    # from doom_py import
+    import vizdoom
+    from vizdoom import (Mode, Button, DoomGame, GameVariable, ScreenFormat, ScreenResolution,
+        ViZDoomUnexpectedExitException, ViZDoomErrorException)
 except ImportError as e:
     raise gym.error.DependencyNotInstalled("{}. (HINT: you can install Doom dependencies " +
-                                           "with 'pip install doom_py.)'".format(e))
+                                           "with 'pip install vizdoom.)'".format(e))
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,8 @@ DOOM_SETTINGS = [
     ['my_way_home.cfg', 'my_way_home.wad', '', 5, [13, 14, 15], -0.22, 0.5],                     # 5 - MyWayHome
     ['predict_position.cfg', 'predict_position.wad', 'map01', 3, [0, 14, 15], -0.075, 0.5],      # 6 - PredictPosition
     ['take_cover.cfg', 'take_cover.wad', 'map01', 5, [10, 11], 0, 750],                          # 7 - TakeCover
-    ['deathmatch.cfg', 'deathmatch.wad', '', 5, [x for x in range(NUM_ACTIONS) if x != 33], 0, 20] # 8 - Deathmatch
+    # ignore delta actions even for deathmatch
+    ['deathmatch.cfg', 'deathmatch.wad', '', 5, [x for x in range(NUM_ACTIONS - 5) if x != 33], 0, 20] # 8 - Deathmatch
 ]
 
 # Singleton pattern
@@ -62,7 +65,8 @@ class DoomEnv(gym.Env):
     def __init__(self, level):
         self.previous_level = -1
         self.level = level
-        self.game = DoomGame()
+        self.game = vizdoom.DoomGame()
+        print("game state: %s" % self.game.get_state())
         self.loader = Loader()
         self.doom_dir = os.path.dirname(os.path.abspath(__file__))
         self._mode = 'algo'                         # 'algo' or 'human'
@@ -71,7 +75,8 @@ class DoomEnv(gym.Env):
         self.is_initialized = False                 # Indicates that reset() has been called
         self.curr_seed = 0
         self.lock = (DoomLock()).get_lock()
-        self.action_space = spaces.MultiDiscrete([[0, 1]] * 38 + [[-10, 10]] * 2 + [[-100, 100]] * 3)
+        # self.action_space = spaces.MultiDiscrete([[0, 1]] * 38 + [[-10, 10]] * 2 + [[-100, 100]] * 3)
+        self.action_space = spaces.Discrete(43)
         self.allowed_actions = list(range(NUM_ACTIONS))
         self.screen_height = 480
         self.screen_width = 640
@@ -88,11 +93,12 @@ class DoomEnv(gym.Env):
             self.lock = lock
 
     def _load_level(self):
+        print("loading level")
         # Closing if is_initialized
         if self.is_initialized:
             self.is_initialized = False
             self.game.close()
-            self.game = DoomGame()
+            self.game = vizdoom.DoomGame()
 
         # Customizing level
         if getattr(self, '_customize_game', None) is not None and callable(self._customize_game):
@@ -102,7 +108,7 @@ class DoomEnv(gym.Env):
         else:
             # Loading Paths
             if not self.is_initialized:
-                self.game.set_vizdoom_path(self.loader.get_vizdoom_path())
+                # self.game.set_vizdoom_path(self.loader.get_vizdoom_path())
                 self.game.set_doom_game_path(self.loader.get_freedoom_path())
 
             # Common settings
@@ -134,7 +140,7 @@ class DoomEnv(gym.Env):
                     'singleton lock in memory.')
             self._start_episode()
             self.is_initialized = True
-            return self.game.get_state().image_buffer.copy()
+            return self.game.get_state().screen_buffer.copy()
 
         # Human mode
         else:
@@ -175,12 +181,18 @@ class DoomEnv(gym.Env):
         return
 
     def _step(self, action):
-        if NUM_ACTIONS != len(action):
-            logger.warn('Doom action list must contain %d items. Padding missing items with 0' % NUM_ACTIONS)
-            old_action = action
-            action = [0] * NUM_ACTIONS
-            for i in range(len(old_action)):
-                action[i] = old_action[i]
+        # if NUM_ACTIONS != len(action):
+        #     logger.warn('Doom action list must contain %d items. Padding missing items with 0' % NUM_ACTIONS)
+        #     old_action = action
+        #     action = [0] * NUM_ACTIONS
+        #     for i in range(len(old_action)):
+        #         action[i] = old_action[i]
+        
+        # Convert to array
+        action_arr = np.zeros(NUM_ACTIONS, dtype=int)
+        action_arr[action] = 1
+        action = action_arr
+        
         # action is a list of numbers but DoomGame.make_action expects a list of ints
         if len(self.allowed_actions) > 0:
             list_action = [int(action[action_idx]) for action_idx in self.allowed_actions]
@@ -197,23 +209,23 @@ class DoomEnv(gym.Env):
                 return np.zeros(shape=self.observation_space.shape, dtype=np.uint8), reward, is_finished, info
             else:
                 is_finished = False
-                return state.image_buffer.copy(), reward, is_finished, info
+                return state.screen_buffer.copy(), reward, is_finished, info
 
-        except doom_py.vizdoom.ViZDoomIsNotRunningException:
+        except vizdoom.ViZDoomIsNotRunningException:
             return np.zeros(shape=self.observation_space.shape, dtype=np.uint8), 0, True, {}
 
     def _reset(self):
         if self.is_initialized and not self._closed:
             self._start_episode()
-            image_buffer = self.game.get_state().image_buffer
-            if image_buffer is None:
+            screen_buffer = self.game.get_state().screen_buffer
+            if screen_buffer is None:
                 raise error.Error(
                     'VizDoom incorrectly initiated. This is likely caused by a missing multiprocessing lock. ' +
                     'To run VizDoom across multiple processes, you need to pass a lock when you configure the env ' +
                     '[e.g. env.configure(lock=my_multiprocessing_lock)], or create and close an env ' +
                     'before starting your processes [e.g. env = gym.make("DoomBasic-v0"); env.close()] to cache a ' +
                     'singleton lock in memory.')
-            return image_buffer.copy()
+            return screen_buffer.copy()
         else:
             return self._load_level()
 
@@ -227,7 +239,7 @@ class DoomEnv(gym.Env):
             if 'human' == mode and self.no_render:
                 return
             state = self.game.get_state()
-            img = state.image_buffer
+            img = state.screen_buffer
             # VizDoom returns None if the episode is finished, let's make it
             # an empty image so the recorder doesn't stop
             if img is None:
@@ -239,7 +251,7 @@ class DoomEnv(gym.Env):
                 if self.viewer is None:
                     self.viewer = rendering.SimpleImageViewer()
                 self.viewer.imshow(img)
-        except doom_py.vizdoom.ViZDoomIsNotRunningException:
+        except vizdoom.ViZDoomIsNotRunningException:
             pass  # Doom has been closed
 
     def _close(self):
@@ -279,6 +291,9 @@ class DoomEnv(gym.Env):
         info['AMMO8'] = state_variables[19]
         info['AMMO9'] = state_variables[20]
         info['AMMO0'] = state_variables[21]
+        info['POSITION_X'] = state_variables[22]
+        info['POSITION_Y'] = state_variables[23]
+        info['POSITION_Z'] = state_variables[24]
         return info
 
 
@@ -415,7 +430,7 @@ class MetaDoomEnv(DoomEnv):
 
         if self.is_initialized and not self._closed and self.previous_level == self.level:
             self._start_episode()
-            return self.game.get_state().image_buffer.copy()
+            return self.game.get_state().screen_buffer.copy()
         else:
             return self._load_level()
 
@@ -449,3 +464,25 @@ class MetaDoomEnv(DoomEnv):
             self.find_new_level = True
 
         return obs, reward, is_finished, info
+
+
+class Loader():
+    """
+    This class converts file name to full paths to be imported
+    by the DoomGame
+    """
+    
+    def get_vizdoom_path(self):
+        package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
+        # return os.path.join(package_directory, 'bin/vizdoom')
+        return 'vizdoom'
+    
+    def get_freedoom_path(self):
+        # package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
+        # return os.path.join(package_directory, 'scenarios/freedoom2.wad')
+        # Assume freedoom.wad is in the working dir
+        return os.path.join(os.getcwd(), 'freedoom2.wad')
+    
+    def get_scenario_path(self, name):
+        package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
+        return os.path.join(package_directory, 'scenarios/{}'.format(name))
