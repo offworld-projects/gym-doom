@@ -201,6 +201,9 @@ class DoomEnv(gym.Env):
         try:
             reward = self.game.make_action(list_action)
             state = self.game.get_state()
+            if state is None:
+                raise vizdoom.ViZDoomIsNotRunningException()
+            
             info = self._get_game_variables(state.game_variables)
             info["TOTAL_REWARD"] = round(self.game.get_total_reward(), 4)
 
