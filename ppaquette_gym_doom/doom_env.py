@@ -22,6 +22,7 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 # Constants
+LIMIT_SPACE = True
 NUM_ACTIONS = 43
 NUM_LEVELS = 9
 CONFIG = 0
@@ -76,8 +77,15 @@ class DoomEnv(gym.Env):
         self.curr_seed = 0
         self.lock = (DoomLock()).get_lock()
         # self.action_space = spaces.MultiDiscrete([[0, 1]] * 38 + [[-10, 10]] * 2 + [[-100, 100]] * 3)
-        self.action_space = spaces.Discrete(43)
-        self.allowed_actions = list(range(NUM_ACTIONS))
+
+        self.allowed_actions = DOOM_SETTINGS[self.level][ACTIONS]
+        if LIMIT_SPACE:
+            self.action_space = spaces.Discrete(len(self.allowed_actions))
+            self.action_map = {i: act for i, act in enumerate(self.allowed_actions)}
+        else:
+            self.action_space = spaces.Discrete(43)
+            self.action_map = None
+
         self.screen_height = 480
         self.screen_width = 640
         self.screen_resolution = ScreenResolution.RES_640X480
@@ -190,7 +198,10 @@ class DoomEnv(gym.Env):
 
         # Convert to array
         action_arr = np.zeros(NUM_ACTIONS, dtype=int)
-        action_arr[action] = 1
+        if self.action_map is not None:
+            action_arr[self.action_map[action]] = 1
+        else:
+            action_arr[action] = 1
         action = action_arr
 
         # action is a list of numbers but DoomGame.make_action expects a list of ints
