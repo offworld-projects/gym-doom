@@ -187,12 +187,12 @@ class DoomEnv(gym.Env):
         #     action = [0] * NUM_ACTIONS
         #     for i in range(len(old_action)):
         #         action[i] = old_action[i]
-        
+
         # Convert to array
         action_arr = np.zeros(NUM_ACTIONS, dtype=int)
         action_arr[action] = 1
         action = action_arr
-        
+
         # action is a list of numbers but DoomGame.make_action expects a list of ints
         if len(self.allowed_actions) > 0:
             list_action = [int(action[action_idx]) for action_idx in self.allowed_actions]
@@ -203,7 +203,7 @@ class DoomEnv(gym.Env):
             state = self.game.get_state()
             if state is None:
                 raise vizdoom.ViZDoomIsNotRunningException()
-            
+
             info = self._get_game_variables(state.game_variables)
             info["TOTAL_REWARD"] = round(self.game.get_total_reward(), 4)
 
@@ -294,9 +294,12 @@ class DoomEnv(gym.Env):
         info['AMMO8'] = state_variables[19]
         info['AMMO9'] = state_variables[20]
         info['AMMO0'] = state_variables[21]
-        info['POSITION_X'] = state_variables[22]
-        info['POSITION_Y'] = state_variables[23]
-        info['POSITION_Z'] = state_variables[24]
+        try:
+            info['POSITION_X'] = state_variables[22]
+            info['POSITION_Y'] = state_variables[23]
+            info['POSITION_Z'] = state_variables[24]
+        except:
+            pass
         return info
 
 
@@ -474,18 +477,18 @@ class Loader():
     This class converts file name to full paths to be imported
     by the DoomGame
     """
-    
+
     def get_vizdoom_path(self):
         package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
         # return os.path.join(package_directory, 'bin/vizdoom')
         return 'vizdoom'
-    
+
     def get_freedoom_path(self):
         # package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
         # return os.path.join(package_directory, 'scenarios/freedoom2.wad')
         # Assume freedoom.wad is in the working dir
         return os.path.join(os.getcwd(), 'freedoom2.wad')
-    
+
     def get_scenario_path(self, name):
         package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
         return os.path.join(package_directory, 'scenarios/{}'.format(name))
