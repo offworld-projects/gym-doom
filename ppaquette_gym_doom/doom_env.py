@@ -253,7 +253,7 @@ class DoomEnv(gym.Env):
             if 'human' == mode and self.no_render:
                 return
             state = self.game.get_state()
-            img = state.screen_buffer
+            img = None if state is None else state.screen_buffer
             # VizDoom returns None if the episode is finished, let's make it
             # an empty image so the recorder doesn't stop
             if img is None:
@@ -495,10 +495,10 @@ class Loader():
         return 'vizdoom'
 
     def get_freedoom_path(self):
-        # package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
-        # return os.path.join(package_directory, 'scenarios/freedoom2.wad')
+        package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))
+        return os.path.join(package_directory, 'freedoom2.wad')
         # Assume freedoom.wad is in the working dir
-        return os.path.join(os.getcwd(), 'freedoom2.wad')
+        #return os.path.join(os.getcwd(), 'freedoom2.wad')
 
     def get_scenario_path(self, name):
         package_directory = os.path.dirname(os.path.abspath(vizdoom.__file__))

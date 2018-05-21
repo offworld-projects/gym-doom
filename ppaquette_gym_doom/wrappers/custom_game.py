@@ -3,8 +3,8 @@ import types
 import gym
 
 try:
-    import doom_py
-    from doom_py import DoomGame, Mode, Button, GameVariable, ScreenFormat, ScreenResolution, Loader
+    import vizdoom
+    from vizdoom import DoomGame, Mode, Button, GameVariable, ScreenFormat, ScreenResolution
 except ImportError as e:
     raise gym.error.DependencyNotInstalled("{}. (HINT: you can install Doom dependencies " +
                                            "with 'pip install doom_py.)'".format(e))
